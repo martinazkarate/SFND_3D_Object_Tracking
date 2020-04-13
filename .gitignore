@@ -1,4 +1,4 @@
 build/*
 .vscode
 dat/yolo/yolov3.weights.bak
-dat/yolo/yolov3.weights
+dat/yolo/yolov3.weights.full_file
