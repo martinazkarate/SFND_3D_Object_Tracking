@@ -156,9 +156,20 @@ int main(int argc, const char *argv[])
         {
             detKeypointsShiTomasi(keypoints, imgGray, false);
         }
+        else if(detectorType.compare("HARRIS") == 0)
+        {
+            //performances.detectorTime[imgIndex] = 
+            detKeypointsHarris(keypoints, imgGray, false);
+        }
+        else if (detectorType.compare("FAST") == 0 || detectorType.compare("BRISK") == 0 || detectorType.compare("ORB") == 0 || detectorType.compare("AKAZE") == 0 || detectorType.compare("SIFT") == 0)
+        {
+            //performances.detectorTime[imgIndex] = 
+            detKeypointsModern(keypoints, imgGray, detectorType, false);
+        }
         else
         {
-            //...
+            cout << "The detector type is not implemented. Exiting now." << endl;
+            return EXIT_FAILURE;
         }
 
         // optional : limit number of keypoints (helpful for debugging and learning)
