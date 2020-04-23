@@ -97,11 +97,13 @@ int main(int argc, const char *argv[])
 
 
         /* DETECT & CLASSIFY OBJECTS */
-
+        
+        bVis = false;
         float confThreshold = 0.2;
         float nmsThreshold = 0.4;        
         detectObjects((dataBuffer.end() - 1)->cameraImg, (dataBuffer.end() - 1)->boundingBoxes, confThreshold, nmsThreshold,
                       yoloBasePath, yoloClassesFile, yoloModelConfiguration, yoloModelWeights, bVis);
+        bVis=false;
 
         cout << "#2 : DETECT & CLASSIFY OBJECTS done" << endl;
 
@@ -129,7 +131,7 @@ int main(int argc, const char *argv[])
         clusterLidarWithROI((dataBuffer.end()-1)->boundingBoxes, (dataBuffer.end() - 1)->lidarPoints, shrinkFactor, P_rect_00, R_rect_00, RT);
 
         // Visualize 3D objects
-        bVis = true;
+        bVis = false;
         if(bVis)
         {
             show3DObjects((dataBuffer.end()-1)->boundingBoxes, cv::Size(4.0, 20.0), cv::Size(2000, 2000), true);
@@ -140,7 +142,7 @@ int main(int argc, const char *argv[])
         
         
         // REMOVE THIS LINE BEFORE PROCEEDING WITH THE FINAL PROJECT
-        continue; // skips directly to the next image without processing what comes beneath
+        // continue; // skips directly to the next image without processing what comes beneath
 
         /* DETECT IMAGE KEYPOINTS */
 
@@ -231,6 +233,12 @@ int main(int argc, const char *argv[])
             map<int, int> bbBestMatches;
             matchBoundingBoxes(matches, bbBestMatches, *(dataBuffer.end()-2), *(dataBuffer.end()-1)); // associate bounding boxes between current and previous frame using keypoint matches
             //// EOF STUDENT ASSIGNMENT
+
+            // showing contents of bbBestMatches
+            std::cout << "bbBestMatches contains:\n";
+            for (auto it=bbBestMatches.begin(); it!=bbBestMatches.end(); ++it)
+                std::cout << it->first << " => " << it->second << '\n';
+
 
             // store matches in current data frame
             (dataBuffer.end()-1)->bbMatches = bbBestMatches;

@@ -148,11 +148,206 @@ void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPo
 void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
                      std::vector<LidarPoint> &lidarPointsCurr, double frameRate, double &TTC)
 {
-    // ...
+    // ransac parameters for segmentation
+    int maxIterations = 50;
+    float distanceTol = 0.15;
+
+    // Segment Plane from previous lidar points
+    segmentPlane(lidarPointsPrev, maxIterations, distanceTol);
+    
+    // Segment Plane from current lidar points
+    segmentPlane(lidarPointsCurr, maxIterations, distanceTol);
+
+    float prev_xmin = 1e8;
+    for (auto it1 = lidarPointsPrev.begin(); it1 != lidarPointsPrev.end(); ++it1)
+    {
+        float x = (*it1).x; // world position in m with x facing forward from sensor
+        prev_xmin = prev_xmin<x ? prev_xmin : x;
+    }
+
+    float curr_xmin = 1e8;
+    for (auto it2 = lidarPointsCurr.begin(); it2 != lidarPointsCurr.end(); ++it2)
+    {
+        float x = (*it2).x; // world position in m with x facing forward from sensor
+        curr_xmin = curr_xmin<x ? curr_xmin : x;
+    }
+
+    TTC = curr_xmin / frameRate / (prev_xmin - curr_xmin);
 }
 
 
 void matchBoundingBoxes(std::vector<cv::DMatch> &matches, std::map<int, int> &bbBestMatches, DataFrame &prevFrame, DataFrame &currFrame)
 {
-    // ...
+    std::map<std::pair<int, int>, int> bbCandidateMatches; // map structure with pair of IDs of matched bounding boxes and counter for the ocurrences that pair happens
+
+    for (auto match = matches.begin(); match != matches.end(); match++) // Iterate over the vector of matches
+    {
+        cv::KeyPoint prevKeyPoint, currKeyPoint;
+        prevKeyPoint = prevFrame.keypoints[match->queryIdx]; // retrieve from the match pair the keypoint from the previous frame vector of keypoints
+        currKeyPoint = currFrame.keypoints[match->trainIdx]; // retrieve from the match pair the keypoint from the current frame vector of keypoints
+        
+        BoundingBox prevBoundingBox, currBoundingBox;
+        
+        // find the Bounding Box from the previous frame vector of Bounding Boxes that contains the previous keypoint
+        bool bb1Found = false; 
+        for (auto boundingBox = prevFrame.boundingBoxes.begin(); boundingBox != prevFrame.boundingBoxes.end(); boundingBox++)
+        {
+            if (boundingBox->roi.contains(prevKeyPoint.pt))
+            {
+                if (!bb1Found)
+                {
+                    prevBoundingBox = *boundingBox;
+                    bb1Found = true;
+                }
+                else // if the keypoint is found in more than one Bounding Box then disregard this keypoint/match since it can cross reference two unrelated bounding boxes
+                {
+                    bb1Found = false;
+                    break;
+                }       
+            }
+        }
+
+        bool bb2Found = false;
+        for (auto boundingBox = currFrame.boundingBoxes.begin(); boundingBox != currFrame.boundingBoxes.end(); boundingBox++)
+        {
+            if (boundingBox->roi.contains(currKeyPoint.pt))
+            {
+                if (!bb2Found)
+                {
+                    currBoundingBox = *boundingBox;
+                    bb2Found = true;
+                }
+                else  // if the keypoint is found in more than one Bounding Box then disregard this keypoint/match since it can cross reference two unrelated bounding boxes
+                {
+                    bb2Found = false;
+                    break;
+                }
+            }
+        }
+
+        if ( bb1Found && bb2Found ) //store the candidate pair of matched bounding boxes in a map that contains the candidate matches and the count of times this match is found.
+        {
+            std::pair<int,int> bbCandidateMatch = {prevBoundingBox.boxID,currBoundingBox.boxID};
+
+            if (bbCandidateMatches.find(bbCandidateMatch) != bbCandidateMatches.end())
+            {
+                bbCandidateMatches[bbCandidateMatch]++;
+            }
+            else
+            {
+                bbCandidateMatches.insert(std::pair<std::pair<int,int>,int>(bbCandidateMatch,1));
+            }
+        }
+    }
+
+    for (auto it1 = bbCandidateMatches.begin(); it1 != bbCandidateMatches.end(); ++it1) // loop over the candidate matches and select, for each BB ID of the previous frame, the match with higher occurrences
+    {
+        int bb1ID = it1->first.first;
+        int bb2ID = it1->first.second;
+        int counter = it1->second;
+        if (bbBestMatches.find(bb1ID) == bbBestMatches.end())
+        {
+            for (auto it2 = bbCandidateMatches.begin(); it2 != bbCandidateMatches.end(); ++it2)
+            {
+                if (bb1ID == it2->first.first)
+                {
+                    if (it2->second > counter)
+                    {
+                        bb2ID = it2->first.second;
+                        counter = it2->second;
+                    }
+                }
+            }
+            bbBestMatches.insert(std::pair<int,int>(bb1ID,bb2ID));
+        }
+    }
+    
+}
+
+void segmentPlane(std::vector<LidarPoint> &lidarPoints, int maxIterations, float distanceTol)
+{
+    std::unordered_set<int> inliersResult;
+	srand(time(NULL));
+	
+	while (maxIterations--)
+	{
+		std::unordered_set<int> inliers;
+
+		// Ensure getting 3 different random points
+		while (inliers.size()<3)
+			inliers.insert(rand()%(lidarPoints.size()));
+
+		auto itr = inliers.begin();
+
+        float x1, y1, z1, x2, y2, z2, x3, y3, z3;
+		//Eigen::Vector3f point1 = {lidarPoints[*itr].x,lidarPoints[*itr].y,lidarPoints[*itr].z};
+		x1 = lidarPoints[*itr].x;
+		y1 = lidarPoints[*itr].y;
+		z1 = lidarPoints[*itr].z;
+		itr++;
+		//Eigen::Vector3f point2 = {lidarPoints[*itr].x,lidarPoints[*itr].y,lidarPoints[*itr].z};
+		x2 = lidarPoints[*itr].x;
+		y2 = lidarPoints[*itr].y;
+		z2 = lidarPoints[*itr].z;
+		itr++;
+		//Eigen::Vector3f point3 = {lidarPoints[*itr].x,lidarPoints[*itr].y,lidarPoints[*itr].z};
+		x3 = lidarPoints[*itr].x;
+		y3 = lidarPoints[*itr].y;
+		z3 = lidarPoints[*itr].z;
+		//itr++;
+
+		//Eigen::Vector3f vector12 = point2-point1;
+		//Eigen::Vector3f vector13 = point3-point1;
+
+		//Eigen::Vector3f vectorPlane = vector12.cross(vector13);
+
+		float A = (y2-y1)*(z3-z1)-(z2-z1)*(y3-y1);
+		float B = (z2-z1)*(x3-x1)-(x2-x1)*(z3-z1);
+		float C = (x2-x1)*(y3-y1)-(y2-y1)*(x3-x1);
+		
+		// Ensure cross product is not null (when 3 random points happen to be in line and do not define a plane)
+		//float norm =vectorPlane.norm();
+		//if (norm == 0)
+		if (A==0 && B==0 && C==0)
+			continue;
+
+		float D = -(A*x1+B*y1+C*z1);
+		//float D = -vectorPlane.dot(point1);
+
+		for(int index = 0; index < lidarPoints.size(); index++)
+		{
+			// Don't compute distance for the three originally selected random points
+			if (inliers.count(index)>0)
+				continue;
+
+			float x,y,z; 
+            x = lidarPoints[index].x;
+            y = lidarPoints[index].y;
+            z = lidarPoints[index].z;
+			//Eigen::Vector3f point = {lidarPoints[index].x,lidarPoints[index].y,lidarPoints[index].z};
+			float distance = fabs(A*x+B*y+C*z+D)/sqrt(A*A+B*B+C*C);
+			//float distance = fabs(vectorPlane.dot(point)+D)/norm;
+			if (distance < distanceTol)
+			{
+				inliers.insert(index);
+			}
+		}
+		if (inliers.size()>inliersResult.size())
+		{
+			inliersResult=inliers;
+		}
+	}
+
+    if (inliersResult.size() == 0)
+    {
+        std::cerr << "Could not estimate a planar model for the given dataset" << std::endl;
+    }
+
+    int index = 0;
+    for(auto it = lidarPoints.begin(); it != lidarPoints.end(); it++)
+	{
+		if(!inliersResult.count(index))
+			lidarPoints.erase(it);
+        index++;
+	}
 }
