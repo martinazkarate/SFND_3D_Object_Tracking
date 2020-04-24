@@ -133,7 +133,41 @@ void show3DObjects(std::vector<BoundingBox> &boundingBoxes, cv::Size worldSize, 
 // associate a given bounding box with the keypoints it contains
 void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, std::vector<cv::DMatch> &kptMatches)
 {
-    // ...
+    for (auto match = kptMatches.begin(); match != kptMatches.end(); match++) // Iterate over the vector of matches
+    {
+        if (boundingBox.roi.contains(kptsCurr[match->trainIdx].pt))
+            boundingBox.kptMatches.push_back(*match);
+    }
+
+    if (boundingBox.kptMatches.size() == 0)
+    {
+        std::cerr << "No keypoints found within the Bounding Box" << std::endl;
+        return;
+    }
+
+    vector<float> distances(boundingBox.kptMatches.size());
+    for (auto match = kptMatches.begin(); match != kptMatches.end(); match++)
+    {
+        distances.push_back((*match).distance);
+    }
+    // Mean of distances
+    float sum = std::accumulate(distances.begin(), distances.end(), 0.0);
+    float distances_mean = sum / distances.size();
+
+    // Standard Dev of distances
+    vector<float> diff(distances.size());
+    transform(distances.begin(), distances.end(), diff.begin(), [distances_mean](float x) { return x - distances_mean; });
+    float sq_sum = inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
+    float distances_variance = sq_sum / distances.size();
+    
+    for (auto match = kptMatches.begin(); match != kptMatches.end(); match++)
+    {
+        if (match->distance > (distances_mean+sqrt(distances_variance)))
+        {
+            kptMatches.erase(match);
+            match--;
+        }
+    }
 }
 
 
@@ -141,7 +175,7 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
 void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPoint> &kptsCurr, 
                       std::vector<cv::DMatch> kptMatches, double frameRate, double &TTC, cv::Mat *visImg)
 {
-    // ...
+    
 }
 
 
@@ -150,7 +184,7 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
 {
     // ransac parameters for segmentation
     int maxIterations = 50;
-    float distanceTol = 0.15;
+    float distanceTol = 0.2;
 
     // Segment Plane from previous lidar points
     segmentPlane(lidarPointsPrev, maxIterations, distanceTol);
@@ -347,7 +381,10 @@ void segmentPlane(std::vector<LidarPoint> &lidarPoints, int maxIterations, float
     for(auto it = lidarPoints.begin(); it != lidarPoints.end(); it++)
 	{
 		if(!inliersResult.count(index))
-			lidarPoints.erase(it);
+        {
+            lidarPoints.erase(it);
+            it--;
+        }
         index++;
 	}
 }
