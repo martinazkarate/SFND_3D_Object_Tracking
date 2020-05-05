@@ -145,6 +145,7 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
         return;
     }
 
+    /*
     vector<float> distances(boundingBox.kptMatches.size());
     for (auto match = kptMatches.begin(); match != kptMatches.end(); match++)
     {
@@ -168,6 +169,7 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
             match--;
         }
     }
+    */
 }
 
 
@@ -214,10 +216,10 @@ void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPo
     }
 
     // compute camera-based TTC from distance ratios
-    double meanDistRatio = std::accumulate(distRatios.begin(), distRatios.end(), 0.0) / distRatios.size();
+    //double meanDistRatio = std::accumulate(distRatios.begin(), distRatios.end(), 0.0) / distRatios.size();
 
     double dT = 1 / frameRate;
-    TTC = -dT / (1 - meanDistRatio);
+    //TTC = -dT / (1 - meanDistRatio);
 
     // STUDENT TASK (replacement for meanDistRatio)
     std::sort(distRatios.begin(), distRatios.end());
@@ -234,26 +236,37 @@ void computeTTCLidar(std::vector<LidarPoint> &lidarPointsPrev,
     float distanceTol = 0.2;
 
     // Segment Plane from previous lidar points
-    segmentPlane(lidarPointsPrev, maxIterations, distanceTol);
+    //segmentPlane(lidarPointsPrev, maxIterations, distanceTol);
     
     // Segment Plane from current lidar points
-    segmentPlane(lidarPointsCurr, maxIterations, distanceTol);
+    //segmentPlane(lidarPointsCurr, maxIterations, distanceTol);
 
+    vector<float> prev_x;
     float prev_xmin = 1e8;
     for (auto it1 = lidarPointsPrev.begin(); it1 != lidarPointsPrev.end(); ++it1)
     {
         float x = (*it1).x; // world position in m with x facing forward from sensor
         prev_xmin = prev_xmin<x ? prev_xmin : x;
+        prev_x.push_back(x);
     }
 
+    vector<float> curr_x;
     float curr_xmin = 1e8;
     for (auto it2 = lidarPointsCurr.begin(); it2 != lidarPointsCurr.end(); ++it2)
     {
         float x = (*it2).x; // world position in m with x facing forward from sensor
         curr_xmin = curr_xmin<x ? curr_xmin : x;
+        curr_x.push_back(x);
     }
 
-    TTC = curr_xmin / frameRate / (prev_xmin - curr_xmin);
+    std::sort(prev_x.begin(), prev_x.end());
+    std::sort(curr_x.begin(), curr_x.end());
+    float prevMedianDistance = prev_x.at(floor(prev_x.size()/2));
+    float currMedianDistance = curr_x.at(floor(curr_x.size()/2));
+
+    double dT = 1 / frameRate;
+    //TTC = curr_xmin / frameRate / (prev_xmin - curr_xmin);
+    TTC = currMedianDistance * dT / (prevMedianDistance - currMedianDistance);
 }
 
 
