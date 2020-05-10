@@ -136,7 +136,10 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
     for (auto match = kptMatches.begin(); match != kptMatches.end(); match++) // Iterate over the vector of matches
     {
         if (boundingBox.roi.contains(kptsCurr[match->trainIdx].pt))
+        {
             boundingBox.kptMatches.push_back(*match);
+            boundingBox.keypoints.push_back(kptsCurr[match->trainIdx]);
+        }            
     }
 
     if (boundingBox.kptMatches.size() == 0)
@@ -145,7 +148,8 @@ void clusterKptMatchesWithROI(BoundingBox &boundingBox, std::vector<cv::KeyPoint
         return;
     }
 
-    /*
+    /* 
+    // Filter low quality matches using the "distance" metric of the match
     vector<float> distances(boundingBox.kptMatches.size());
     for (auto match = kptMatches.begin(); match != kptMatches.end(); match++)
     {
@@ -223,7 +227,8 @@ void computeTTCCamera(std::vector<cv::KeyPoint> &kptsPrev, std::vector<cv::KeyPo
 
     // STUDENT TASK (replacement for meanDistRatio)
     std::sort(distRatios.begin(), distRatios.end());
-    double medianDistRatio = distRatios.at(floor(distRatios.size()/2));
+    int medianIndex = floor(distRatios.size()/2.0);
+    double medianDistRatio = distRatios[medianIndex];
     TTC = -dT / (1 - medianDistRatio);
 }
 

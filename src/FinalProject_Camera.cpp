@@ -22,6 +22,24 @@
 
 using namespace std;
 
+struct perfStats {
+  string detectorType;
+  string descriptorType;
+  string matcherType;
+  string selectorType;
+  int   numKeyPointsPerframe[20];
+  int   numKeyPointsPerROI[20];
+  int   numMatchedKeyPoints[20];
+  float neighboorhoodSizeMean[20];
+  float neighboorhoodSizeVariance[20];
+  float matchDistanceMean[20];
+  float matchDistanceVariance[20];
+  double detectorTime[20];
+  double descriptorTime[20];
+  double matcherTime[20];
+  double TTC[20];
+};
+
 /* MAIN PROGRAM */
 int main(int argc, const char *argv[])
 {
@@ -74,6 +92,64 @@ int main(int argc, const char *argv[])
     vector<DataFrame> dataBuffer; // list of data frames which are held in memory at the same time
     bool bVis = false;            // visualize results
 
+    // struct to hold performances for evalutation 
+    perfStats performances;
+
+    std::string filename = "../data.csv";
+    std::ofstream output_stream(filename, std::ios::binary | std::ios::app);
+
+    if (!output_stream.is_open()) {
+        std::cerr << "failed to open file: " << filename << std::endl;
+        return EXIT_FAILURE;
+    }
+
+    vector<string> detector_list   = {"SHITOMASI","HARRIS","FAST","BRISK","ORB","AKAZE","SIFT"};
+    vector<string> descriptor_list = {"BRISK","BRIEF","ORB","FREAK","AKAZE","SIFT"};
+    string detector, descriptor;
+
+    for (int det = 0; det < detector_list.size() ; det++) // detector loop
+    {
+        detector = detector_list[det];
+        cout << "Detector is " << detector << endl;
+
+    for (int des = 0; des < descriptor_list.size(); des++) // descriptor loop
+    {
+        descriptor = descriptor_list[des];
+        cout << "Descriptor is " << descriptor << endl;
+
+    if ( descriptor.compare("AKAZE") == 0 && detector.compare("AKAZE") != 0 )
+    {
+        // AKAZE descriptor requires AKAZE detector only.
+        continue;
+    }
+    if ( detector.compare("SIFT") == 0 && descriptor.compare("ORB") == 0 )
+    {
+        // SIFT detector and ORB descriptor combination not valid.
+        continue;
+    }
+    while (!dataBuffer.empty())
+    {
+        dataBuffer.erase(dataBuffer.begin());
+    }
+
+    // write CSV header row
+    output_stream << "Detector Type" << ","
+                << "Descriptor Type" << ","
+                << "Frame#" << ","
+                << "#KeyPointsPerFrame" << ","
+                << "#KeyPointsPerROI" << ","
+                << "NeighborhoodSizeMean" << ","
+                << "NeighborhoodSizeVariance" << ","
+                << "DetectorTime(ms)" << ","
+                << "DescriptorTime(ms)" << ","
+                << "Matcher Type" << ","
+                << "Selector Type" << ","
+                << "#MatchedPoints" << "," 
+                << "MatchDistancesMean" << ","
+                << "MatchDistancesVariance" << ","
+                << "MatchingTime(ms))" << ","
+                << "TTC(s))" << std::endl;
+
     /* MAIN LOOP OVER ALL IMAGES */
 
     for (size_t imgIndex = 0; imgIndex <= imgEndIndex - imgStartIndex; imgIndex+=imgStepWidth)
@@ -93,7 +169,7 @@ int main(int argc, const char *argv[])
         frame.cameraImg = img;
         dataBuffer.push_back(frame);
 
-        cout << "#1 : LOAD IMAGE INTO BUFFER done" << endl;
+        // cout << "#1 : LOAD IMAGE INTO BUFFER done" << endl;
 
 
         /* DETECT & CLASSIFY OBJECTS */
@@ -105,7 +181,7 @@ int main(int argc, const char *argv[])
                       yoloBasePath, yoloClassesFile, yoloModelConfiguration, yoloModelWeights, bVis);
         bVis=false;
 
-        cout << "#2 : DETECT & CLASSIFY OBJECTS done" << endl;
+        // cout << "#2 : DETECT & CLASSIFY OBJECTS done" << endl;
 
 
         /* CROP LIDAR POINTS */
@@ -121,7 +197,7 @@ int main(int argc, const char *argv[])
     
         (dataBuffer.end() - 1)->lidarPoints = lidarPoints;
 
-        cout << "#3 : CROP LIDAR POINTS done" << endl;
+        // cout << "#3 : CROP LIDAR POINTS done" << endl;
 
 
         /* CLUSTER LIDAR POINT CLOUD */
@@ -131,14 +207,14 @@ int main(int argc, const char *argv[])
         clusterLidarWithROI((dataBuffer.end()-1)->boundingBoxes, (dataBuffer.end() - 1)->lidarPoints, shrinkFactor, P_rect_00, R_rect_00, RT);
 
         // Visualize 3D objects
-        bVis = true;
+        bVis = false;
         if(bVis)
         {
             show3DObjects((dataBuffer.end()-1)->boundingBoxes, cv::Size(4.0, 20.0), cv::Size(2000, 2000), true);
         }
         bVis = false;
 
-        cout << "#4 : CLUSTER LIDAR POINT CLOUD done" << endl;
+        // cout << "#4 : CLUSTER LIDAR POINT CLOUD done" << endl;
         
         
         // REMOVE THIS LINE BEFORE PROCEEDING WITH THE FINAL PROJECT
@@ -152,27 +228,28 @@ int main(int argc, const char *argv[])
 
         // extract 2D keypoints from current image
         vector<cv::KeyPoint> keypoints; // create empty feature list for current image
-        string detectorType = "SHITOMASI";
+        string detectorType = detector; // SHITOMASI, HARRIS, FAST, BRISK, ORB, AKAZE, SIFT
+        performances.detectorType = detectorType;
 
         if (detectorType.compare("SHITOMASI") == 0)
         {
-            detKeypointsShiTomasi(keypoints, imgGray, false);
+            performances.detectorTime[imgIndex] = detKeypointsShiTomasi(keypoints, imgGray, false);
         }
         else if(detectorType.compare("HARRIS") == 0)
         {
-            //performances.detectorTime[imgIndex] = 
-            detKeypointsHarris(keypoints, imgGray, false);
+            performances.detectorTime[imgIndex] = detKeypointsHarris(keypoints, imgGray, false);
         }
         else if (detectorType.compare("FAST") == 0 || detectorType.compare("BRISK") == 0 || detectorType.compare("ORB") == 0 || detectorType.compare("AKAZE") == 0 || detectorType.compare("SIFT") == 0)
         {
-            //performances.detectorTime[imgIndex] = 
-            detKeypointsModern(keypoints, imgGray, detectorType, false);
+            performances.detectorTime[imgIndex] = detKeypointsModern(keypoints, imgGray, detectorType, false);
         }
         else
         {
             cout << "The detector type is not implemented. Exiting now." << endl;
             return EXIT_FAILURE;
         }
+
+        performances.numKeyPointsPerframe[imgIndex] = keypoints.size();
 
         // optional : limit number of keypoints (helpful for debugging and learning)
         bool bLimitKpts = false;
@@ -191,19 +268,26 @@ int main(int argc, const char *argv[])
         // push keypoints and descriptor for current frame to end of data buffer
         (dataBuffer.end() - 1)->keypoints = keypoints;
 
-        cout << "#5 : DETECT KEYPOINTS done" << endl;
+        // cout << "#5 : DETECT KEYPOINTS done" << endl;
 
 
         /* EXTRACT KEYPOINT DESCRIPTORS */
 
         cv::Mat descriptors;
-        string descriptorType = "BRISK"; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
-        descKeypoints((dataBuffer.end() - 1)->keypoints, (dataBuffer.end() - 1)->cameraImg, descriptors, descriptorType);
+        string descriptorType = descriptor; // argv[2]; // BRISK, BRIEF, ORB, FREAK, AKAZE, SIFT
+        performances.descriptorType = descriptorType;
+        performances.descriptorTime[imgIndex] = descKeypoints((dataBuffer.end() - 1)->keypoints, (dataBuffer.end() - 1)->cameraImg, descriptors, descriptorType);
+
+        if (performances.descriptorTime[imgIndex] < 0)
+        {
+            cout << "Descriptor extraction failed." << endl;
+            return EXIT_FAILURE;
+        }  
 
         // push descriptors for current frame to end of data buffer
         (dataBuffer.end() - 1)->descriptors = descriptors;
 
-        cout << "#6 : EXTRACT DESCRIPTORS done" << endl;
+        // cout << "#6 : EXTRACT DESCRIPTORS done" << endl;
 
 
         if (dataBuffer.size() > 1) // wait until at least two images have been processed
@@ -213,17 +297,59 @@ int main(int argc, const char *argv[])
 
             vector<cv::DMatch> matches;
             string matcherType = "MAT_BF";        // MAT_BF, MAT_FLANN
-            string descriptorType = "DES_BINARY"; // DES_BINARY, DES_HOG
+            performances.matcherType = matcherType;
+            //string descriptorType = "DES_BINARY"; // DES_BINARY, DES_HOG
             string selectorType = "SEL_NN";       // SEL_NN, SEL_KNN
+            performances.selectorType = selectorType;    
 
-            matchDescriptors((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints,
+            performances.matcherTime[imgIndex] = matchDescriptors((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints,
                              (dataBuffer.end() - 2)->descriptors, (dataBuffer.end() - 1)->descriptors,
                              matches, descriptorType, matcherType, selectorType);
+
+            performances.numMatchedKeyPoints[imgIndex] = matches.size();
+
+            // Evaluation of quality of matches. 
+            // 1.- Statistics of match distance metric
+            vector<float> distances(matches.size());
+            for (auto match = matches.begin(); match != matches.end(); match++)
+            {
+                distances.push_back((*match).distance);
+            }
+            // Mean of distances
+            float sum = std::accumulate(distances.begin(), distances.end(), 0.0);
+            float distances_mean = sum / distances.size();
+
+            // Standard Dev of distances
+            vector<float> diff(distances.size());
+            transform(distances.begin(), distances.end(), diff.begin(), [distances_mean](float x) { return x - distances_mean; });
+            float sq_sum = inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
+            float distances_variance = sq_sum / distances.size();
+
+            performances.matchDistanceMean[imgIndex] = distances_mean;
+            performances.matchDistanceVariance[imgIndex] = distances_variance;
+
+            // 2.- Statistics of keypoints euclidean distance in image
+            vector<float> distances2(matches.size());
+            for (auto match = matches.begin(); match != matches.end(); match++)
+            {
+                cv::KeyPoint queryKpt = (dataBuffer.end() - 2)->keypoints[(*match).queryIdx];
+                cv::KeyPoint trainKpt = (dataBuffer.end() - 1)->keypoints[(*match).trainIdx];
+                distances2.push_back(norm(queryKpt.pt-trainKpt.pt));
+            }
+            // Mean of distances
+            float sum2 = std::accumulate(distances2.begin(), distances2.end(), 0.0);
+            float mean2 = sum2 / distances2.size();
+
+            // Standard Dev of distances
+            vector<float> diff2(distances2.size());
+            transform(distances2.begin(), distances2.end(), diff2.begin(), [mean2](float x) { return x - mean2; });
+            float sq_sum2 = inner_product(diff2.begin(), diff2.end(), diff2.begin(), 0.0);
+            float stdev2 = sqrt(sq_sum2 / distances2.size());
 
             // store matches in current data frame
             (dataBuffer.end() - 1)->kptMatches = matches;
 
-            cout << "#7 : MATCH KEYPOINT DESCRIPTORS done" << endl;
+            // cout << "#7 : MATCH KEYPOINT DESCRIPTORS done" << endl;
 
             
             /* TRACK 3D OBJECT BOUNDING BOXES */
@@ -235,15 +361,15 @@ int main(int argc, const char *argv[])
             //// EOF STUDENT ASSIGNMENT
 
             // showing contents of bbBestMatches
-            std::cout << "bbBestMatches contains:\n";
-            for (auto it=bbBestMatches.begin(); it!=bbBestMatches.end(); ++it)
-                std::cout << it->first << " => " << it->second << '\n';
+            // std::cout << "bbBestMatches contains:\n";
+            // for (auto it=bbBestMatches.begin(); it!=bbBestMatches.end(); ++it)
+            //    std::cout << it->first << " => " << it->second << '\n';
 
 
             // store matches in current data frame
             (dataBuffer.end()-1)->bbMatches = bbBestMatches;
 
-            cout << "#8 : TRACK 3D OBJECT BOUNDING BOXES done" << endl;
+            // cout << "#8 : TRACK 3D OBJECT BOUNDING BOXES done" << endl;
 
 
             /* COMPUTE TTC ON OBJECT IN FRONT */
@@ -286,7 +412,30 @@ int main(int argc, const char *argv[])
                     computeTTCCamera((dataBuffer.end() - 2)->keypoints, (dataBuffer.end() - 1)->keypoints, currBB->kptMatches, sensorFrameRate, ttcCamera);
                     //// EOF STUDENT ASSIGNMENT
 
-                    bVis = true;
+                    performances.TTC[imgIndex] = ttcCamera;
+
+                    performances.numKeyPointsPerROI[imgIndex] = currBB->keypoints.size();
+
+                    // Evaluate distribution of neighborhood size of keypoints
+                    vector<float> sizes(currBB->keypoints.size());
+                    for (auto keypoint = currBB->keypoints.begin(); keypoint != currBB->keypoints.end(); keypoint++)
+                    {
+                        sizes.push_back((*keypoint).size);
+                    } 
+                    double sizes_mean = std::accumulate(sizes.begin(), sizes.end(), 0.0)/sizes.size();
+                    auto add_square = [sizes_mean](double sum, int i)
+                    {
+                        auto d = i - sizes_mean;
+                        return sum + d*d;
+                    };
+                    double total = std::accumulate(sizes.begin(), sizes.end(), 0.0, add_square);
+                    double sizes_variance = total / sizes.size();
+
+                    performances.neighboorhoodSizeMean[imgIndex] = sizes_mean;
+                    performances.neighboorhoodSizeVariance[imgIndex] = sizes_variance;
+
+
+                    bVis = false;
                     if (bVis)
                     {
                         cv::Mat visImg = (dataBuffer.end() - 1)->cameraImg.clone();
@@ -309,8 +458,44 @@ int main(int argc, const char *argv[])
             } // eof loop over all BB matches            
 
         }
+        else
+        {
+            performances.matcherType = "MAT_BF"; // argv[3];
+            performances.selectorType = "SEL_KNN"; // argv[4];
+            performances.matcherTime[imgIndex] = 0.0;
+            performances.numMatchedKeyPoints[imgIndex] = 0;
+            performances.numKeyPointsPerROI[imgIndex] = 0;
+            performances.neighboorhoodSizeMean[imgIndex] = 0.0;
+            performances.neighboorhoodSizeVariance[imgIndex] = 0.0;
+            performances.TTC[imgIndex] = 0.0;
+            cout << endl;
+        }
+        
 
     } // eof loop over all images
+    for (int i = 0; i < 10; i++) 
+    {
+        output_stream << performances.detectorType
+                << "," << performances.descriptorType
+                << "," << i
+                << "," << performances.numKeyPointsPerframe[i]
+                << "," << performances.numKeyPointsPerROI[i]
+                << "," << performances.neighboorhoodSizeMean[i]
+                << "," << performances.neighboorhoodSizeVariance[i]
+                << "," << std::fixed << std::setprecision(3) << performances.detectorTime[i]
+                << "," << std::fixed << std::setprecision(3) << performances.descriptorTime[i]
+                << "," << performances.matcherType
+                << "," << performances.selectorType
+                << "," << performances.numMatchedKeyPoints[i]
+                << "," << performances.matchDistanceMean[i]
+                << "," << performances.matchDistanceVariance[i]
+                << "," << std::fixed << std::setprecision(3) << performances.matcherTime[i]
+                << "," << std::fixed << std::setprecision(3) << performances.TTC[i] << std::endl;
+    }
+    output_stream << std::endl;
+    } // end loop descriptors
+    } // end loop detectors
+    output_stream.close();
 
     return 0;
 }
