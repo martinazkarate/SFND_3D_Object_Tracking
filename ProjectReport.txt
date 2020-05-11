@@ -1,0 +1,30 @@
+FP.0 This file serves as a Final Project Report where all the rubric points are addressed. 
+
+FP.1 The method matchBoundingBoxes is implemented and functionality is validated. The implemented method should be readable (check comments along the code). 
+The results of this method can be checked by uncommenting lines 364-366 of FinalProject_Camera.cpp.
+
+FP.2 Lidar based TTC is computed and output can be seen when visualizing the camera view (set bVis to true at line 438). Different approaches were tested for this method.
+The first one was based on the Plane Segmentation algorithm for point clouds. The idea was to extact from the pointcloud the plane representing the rear of the car. 
+(Uncomment lines 244, 247 and 273 of camFusion_Student.cpp to check results, and comment 274). Results are not very positive with this approach anyway.
+Finally, a more simple approach was used. Just sorting the lidar points by their "x" distance and taking the median of these. This provides results that are not great but
+are at least consistent (good enough).
+
+FP.3 The method clusterKptMatchesWithROI is implemented. Currently the method just checks for keypoints that are contained within the current bouding box and adds to the
+bouding box the matches and keypoints that satisfy this condition. I finally commented out from this method a small filtering loop that was removing the keypoint/matches
+of low quality according to its "distance" attribute, since this did not give any apparent better results.
+
+FP.4 The computeTTCCamera is implemented similarly to how it is done during the lesson exercises. Despite the effort of filtering the low quality matches the most estable
+solution is achieved with median extraction of the distance ratios.
+
+FP.5 From the top view can be seen that the car in front is slightly approaching towards the ego car. The xmin values reported in the top view show some cases where an outlier
+point has been sensed slightly before the car in front which firts creates a sudden drop in the TTC but at the next frame the xmin has increased with respect to the previous
+outlier producing a negative TTC estimate. It is therefore not advisable to use the xmin from the pointcloud. 
+A more robust solution was tried based on Plane Segmentation of the Lidar point cloud to extract the car's rear plane and estimate the TTC with the x distance to that plane.
+However, results did not seem to be very promissing and finally, the median of the x distance seemed to be most stable solution.
+
+FP.6 All combinations of detectors/descriptors are tested. These selections seem to have a big influence on the TTC estimate. The results of all these combinations and 
+performances are reported in the data.csv file. 
+The descriptors that are more consistent accros the different combinations are BRIEF, ORB and SIFT (with SIFT on the top), whereas BRISK and FREAK are generally bad.
+In terms of detectors, SHITOMASI and FAST are ok, HARRIS and BRISK and ORB are not recommended. AKAZE is surprisingly working well with any combination of descriptor. 
+
+
