@@ -7,6 +7,7 @@
 #include <vector>
 #include <cmath>
 #include <limits>
+#include <numeric>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
@@ -322,7 +323,7 @@ int main(int argc, const char *argv[])
             // Standard Dev of distances
             vector<float> diff(distances.size());
             transform(distances.begin(), distances.end(), diff.begin(), [distances_mean](float x) { return x - distances_mean; });
-            float sq_sum = inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
+            float sq_sum = std::inner_product(diff.begin(), diff.end(), diff.begin(), 0.0);
             float distances_variance = sq_sum / distances.size();
 
             performances.matchDistanceMean[imgIndex] = distances_mean;
